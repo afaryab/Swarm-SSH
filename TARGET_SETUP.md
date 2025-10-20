@@ -29,7 +29,8 @@ RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 COPY authorized_keys /root/.ssh/authorized_keys
 RUN chmod 600 /root/.ssh/authorized_keys
 
-# Configure SSH
+# Configure SSH (WARNING: Using root login is not recommended for production)
+# For production, create a dedicated SSH user instead
 RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
@@ -56,7 +57,8 @@ RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 COPY authorized_keys /root/.ssh/authorized_keys
 RUN chmod 600 /root/.ssh/authorized_keys
 
-# Configure SSH
+# Configure SSH (WARNING: Using root login is not recommended for production)
+# For production, create a dedicated SSH user instead
 RUN sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
@@ -117,11 +119,11 @@ ssh-keygen -A
 mkdir -p /root/.ssh
 chmod 700 /root/.ssh
 
-# Add your public key (replace with actual key)
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ... your-key-here" > /root/.ssh/authorized_keys
+# Add your public key (replace with actual key - example is truncated)
+echo "ssh-rsa AAAAB3NzaC1yc2E...remainder-of-key user@host" > /root/.ssh/authorized_keys
 chmod 600 /root/.ssh/authorized_keys
 
-# Configure SSH for key authentication
+# Configure SSH for key authentication (WARNING: root login not recommended for production)
 sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
 sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
@@ -139,7 +141,7 @@ Create an `authorized_keys` file with your public key:
 cat ssh-keys/id_rsa.pub > authorized_keys
 ```
 
-Then in your Dockerfile:
+Then in your Dockerfile (WARNING: Using root login is not recommended for production):
 ```dockerfile
 COPY authorized_keys /root/.ssh/authorized_keys
 RUN chmod 600 /root/.ssh/authorized_keys
@@ -164,13 +166,13 @@ services:
 
 ### Method 3: Environment Variable
 
-Pass the public key as an environment variable:
+Pass the public key as an environment variable (replace with full key):
 
 ```yaml
 services:
   myapp:
     environment:
-      - SSH_PUBLIC_KEY=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQ...
+      - SSH_PUBLIC_KEY=ssh-rsa AAAAB3NzaC1yc2E...remainder-of-key user@host
     command: >
       sh -c "
       echo $SSH_PUBLIC_KEY > /root/.ssh/authorized_keys &&
@@ -225,10 +227,47 @@ Different ways to start SSH server:
 ## Security Best Practices
 
 1. **Disable Password Authentication**: Always use key-based authentication
-2. **Don't expose SSH ports**: Keep SSH internal to Docker network
-3. **Use non-root user**: Create a dedicated SSH user instead of root
+2. **Do not expose SSH ports**: Keep SSH internal to Docker network
+3. **Use non-root user**: Create a dedicated SSH user instead of root (recommended)
 4. **Rotate Keys Regularly**: Update SSH keys periodically
 5. **Use Secrets**: In production, use Docker secrets for sensitive data
+
+### Creating a Non-Root SSH User (Recommended)
+
+Instead of using root, create a dedicated user for SSH:
+
+```dockerfile
+FROM alpine:latest
+
+# Install OpenSSH server
+RUN apk add --no-cache openssh sudo
+
+# Create SSH user
+RUN adduser -D -s /bin/sh sshuser && \
+    echo "sshuser ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/sshuser
+
+# Setup SSH for the user
+RUN mkdir -p /home/sshuser/.ssh && \
+    chmod 700 /home/sshuser/.ssh && \
+    chown sshuser:sshuser /home/sshuser/.ssh
+
+# Copy public key
+COPY authorized_keys /home/sshuser/.ssh/authorized_keys
+RUN chmod 600 /home/sshuser/.ssh/authorized_keys && \
+    chown sshuser:sshuser /home/sshuser/.ssh/authorized_keys
+
+# Generate host keys
+RUN ssh-keygen -A
+
+# Configure SSH
+RUN sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+
+# Start SSH server
+CMD ["/usr/sbin/sshd", "-D", "-e"]
+```
+
+Then connect with: `ssh -i ssh-keys/id_rsa sshuser@container-name`
 
 ## Troubleshooting
 
