@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  swarm-ssh:
+    image: afaryab/swarm-ssh:latest
+    container_name: swarm-ssh-client
+    stdin_open: true
+    tty: true
+    volumes:
+      # Mount your SSH keys directory
+      - ./ssh-keys:/ssh-keys:ro
+      # Mount Docker socket to discover containers
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - swarm-network
+    # Optional: deploy in swarm mode
+    # deploy:
+    #   mode: replicated
+    #   replicas: 1
+    #   placement:
+    #     constraints:
+    #       - node.role == manager
+
+networks:
+  swarm-network:
+    driver: overlay
+    # For non-swarm mode, use bridge driver instead
+    # driver: bridge

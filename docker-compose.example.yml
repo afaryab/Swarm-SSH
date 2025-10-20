@@ -1,0 +1,52 @@
+version: '3.8'
+
+# Example setup with test containers for demonstration
+services:
+  # The Swarm-SSH client container
+  swarm-ssh:
+    build: .
+    # Use the published image instead:
+    # image: afaryab/swarm-ssh:latest
+    container_name: swarm-ssh-client
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./ssh-keys:/ssh-keys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - app-network
+    depends_on:
+      - web-server
+      - database
+
+  # Example target container 1: Web server
+  web-server:
+    image: alpine:latest
+    container_name: web-server
+    command: |
+      sh -c "apk add --no-cache openssh &&
+             ssh-keygen -A &&
+             mkdir -p /root/.ssh &&
+             chmod 700 /root/.ssh &&
+             echo 'Container web-server ready for SSH' &&
+             /usr/sbin/sshd -D -e"
+    networks:
+      - app-network
+
+  # Example target container 2: Database
+  database:
+    image: alpine:latest
+    container_name: database
+    command: |
+      sh -c "apk add --no-cache openssh &&
+             ssh-keygen -A &&
+             mkdir -p /root/.ssh &&
+             chmod 700 /root/.ssh &&
+             echo 'Container database ready for SSH' &&
+             /usr/sbin/sshd -D -e"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
